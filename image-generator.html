@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Site Image Generator</title>
+<style>
+  :root {
+    --bg: #111114;
+    --panel: #1a1a1f;
+    --border: #2a2a30;
+    --text: #e8e8ec;
+    --muted: #8a8a94;
+    --accent: #d4a24e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Georgia', 'Charter', serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 40px 20px;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  h1 {
+    font-size: 1.6rem;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    margin-bottom: 4px;
+  }
+  .sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 32px; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  label {
+    display: block;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  textarea, select, input[type=text] {
+    width: 100%;
+    background: #0d0d10;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 12px;
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: 0.95rem;
+    resize: vertical;
+  }
+  textarea { min-height: 70px; }
+  .row { display: flex; gap: 16px; margin-top: 16px; flex-wrap: wrap; }
+  .row > div { flex: 1; min-width: 140px; }
+  button {
+    background: var(--accent);
+    color: #1a1508;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 3px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 20px;
+    letter-spacing: 0.02em;
+  }
+  button:hover { opacity: 0.9; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .results {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--panel);
+  }
+  .card img { width: 100%; display: block; aspect-ratio: 1/1; object-fit: cover; }
+  .card .meta {
+    padding: 8px 10px;
+    font-size: 0.75rem;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .card a { color: var(--accent); text-decoration: none; }
+  .status { color: var(--muted); font-size: 0.85rem; margin-top: 12px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 24px; }
+  .tab {
+    padding: 8px 16px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--muted);
+    background: var(--panel);
+  }
+  .tab.active { border-color: var(--accent); color: var(--accent); }
+  .key-note { font-size: 0.75rem; color: var(--muted); margin-top: 6px; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Site Image Generator</h1>
+  <div class="sub" id="providerSub">Free, no API key — powered by Pollinations.ai</div>
+
+  <div class="tabs">
+    <div class="tab active" data-provider="pollinations">Pollinations (free)</div>
+    <div class="tab" data-provider="fal">fal.ai</div>
+    <div class="tab" data-provider="replicate">Replicate</div>
+  </div>
+
+  <div class="panel">
+    <div id="keyBlock" class="hidden">
+      <label id="keyLabel">API Key</label>
+      <input type="text" id="apiKey" placeholder="Paste your key — used only in this session, never saved">
+      <div class="key-note">Kept in memory for this tab only. Closing or refreshing clears it.</div>
+    </div>
+    <label style="margin-top:16px">Prompt</label>
+    <textarea id="prompt" placeholder="e.g. warm interior of a small French café, morning light, wood tables, editorial photography style"></textarea>
+    <div class="row">
+      <div>
+        <label>Aspect</label>
+        <select id="aspect">
+          <option value="1024x768">Landscape (hero)</option>
+          <option value="1024x1024">Square</option>
+          <option value="768x1024">Portrait</option>
+          <option value="1280x720">Wide banner</option>
+        </select>
+      </div>
+      <div>
+        <label>Style hint</label>
+        <select id="style">
+          <option value="">None</option>
+          <option value="editorial photography, natural light, shallow depth of field">Editorial photo</option>
+          <option value="minimal flat illustration, muted palette">Flat illustration</option>
+          <option value="warm cinematic photo, golden hour">Cinematic</option>
+          <option value="clean product photography, studio lighting">Product shot</option>
+        </select>
+      </div>
+      <div>
+        <label>Variations</label>
+        <select id="count">
+          <option value="1">1</option>
+          <option value="2" selected>2</option>
+          <option value="4">4</option>
+        </select>
+      </div>
+    </div>
+    <button id="go">Generate</button>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="results" id="results"></div>
+</div>
+
+<script>
+const go = document.getElementById('go');
+const statusEl = document.getElementById('status');
+const results = document.getElementById('results');
+const keyBlock = document.getElementById('keyBlock');
+const keyLabel = document.getElementById('keyLabel');
+const apiKeyInput = document.getElementById('apiKey');
+const providerSub = document.getElementById('providerSub');
+const tabs = document.querySelectorAll('.tab');
+
+let provider = 'pollinations';
+
+const providerInfo = {
+  pollinations: { sub: 'Free, no API key — powered by Pollinations.ai', needsKey: false },
+  fal: { sub: 'fal.ai (Flux) — needs your own fal.ai API key', needsKey: true, keyLabel: 'fal.ai API Key' },
+  replicate: { sub: 'Replicate — needs your own Replicate API token', needsKey: true, keyLabel: 'Replicate API Token' }
+};
+
+tabs.forEach(tab => {
+  tab.addEventListener('click', () => {
+    tabs.forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    provider = tab.dataset.provider;
+    const info = providerInfo[provider];
+    providerSub.textContent = info.sub;
+    keyBlock.classList.toggle('hidden', !info.needsKey);
+    if (info.needsKey) keyLabel.textContent = info.keyLabel;
+    results.innerHTML = '';
+    statusEl.textContent = '';
+  });
+});
+
+function buildPrompt() {
+  const prompt = document.getElementById('prompt').value.trim();
+  const style = document.getElementById('style').value;
+  return style ? `${prompt}, ${style}` : prompt;
+}
+
+function addCard(url, w, h) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `
+    <img src="${url}" alt="generated image" loading="lazy">
+    <div class="meta">
+      <span>${w}×${h}</span>
+      <a href="${url}" target="_blank" download>Open full size</a>
+    </div>
+  `;
+  results.appendChild(card);
+}
+
+async function generatePollinations(fullPrompt, w, h, count) {
+  const encoded = encodeURIComponent(fullPrompt);
+  for (let i = 0; i < count; i++) {
+    const seed = Math.floor(Math.random() * 1000000);
+    addCard(`https://image.pollinations.ai/prompt/${encoded}?width=${w}&height=${h}&seed=${seed}&nologo=true`, w, h);
+  }
+  statusEl.textContent = `Requested ${count} image(s) — right-click to save.`;
+}
+
+async function generateFal(fullPrompt, w, h, count) {
+  const key = apiKeyInput.value.trim();
+  if (!key) { statusEl.textContent = 'Enter your fal.ai API key.'; return; }
+  try {
+    for (let i = 0; i < count; i++) {
+      const res = await fetch('https://fal.run/fal-ai/flux/schnell', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Key ${key}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          prompt: fullPrompt,
+          image_size: { width: w, height: h }
+        })
+      });
+      if (!res.ok) throw new Error(`fal.ai error ${res.status}: ${await res.text()}`);
+      const data = await res.json();
+      const imgUrl = data?.images?.[0]?.url;
+      if (imgUrl) addCard(imgUrl, w, h);
+    }
+    statusEl.textContent = `Generated ${count} image(s) via fal.ai.`;
+  } catch (err) {
+    statusEl.textContent = `fal.ai request failed: ${err.message}. Some browsers block this due to CORS — if so, use fal.ai's own playground or a small backend proxy instead.`;
+  }
+}
+
+async function generateReplicate(fullPrompt, w, h, count) {
+  const key = apiKeyInput.value.trim();
+  if (!key) { statusEl.textContent = 'Enter your Replicate API token.'; return; }
+  statusEl.textContent = 'Note: Replicate\'s API generally blocks direct browser calls (CORS) — attempting anyway...';
+  try {
+    for (let i = 0; i < count; i++) {
+      const createRes = await fetch('https://api.replicate.com/v1/predictions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Token ${key}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          version: 'black-forest-labs/flux-schnell',
+          input: { prompt: fullPrompt, width: w, height: h }
+        })
+      });
+      if (!createRes.ok) throw new Error(`Replicate error ${createRes.status}`);
+      let prediction = await createRes.json();
+      while (prediction.status !== 'succeeded' && prediction.status !== 'failed') {
+        await new Promise(r => setTimeout(r, 1500));
+        const pollRes = await fetch(prediction.urls.get, {
+          headers: { 'Authorization': `Token ${key}` }
+        });
+        prediction = await pollRes.json();
+      }
+      if (prediction.status === 'succeeded') {
+        const out = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
+        if (out) addCard(out, w, h);
+      }
+    }
+    statusEl.textContent = `Generated ${count} image(s) via Replicate.`;
+  } catch (err) {
+    statusEl.textContent = `Replicate request failed (likely CORS, since Replicate doesn't support direct browser calls): ${err.message}. Use Replicate's web dashboard, or I can build you a tiny backend proxy instead.`;
+  }
+}
+
+go.addEventListener('click', async () => {
+  const fullPrompt = buildPrompt();
+  if (!document.getElementById('prompt').value.trim()) { statusEl.textContent = 'Enter a prompt first.'; return; }
+
+  const [w, h] = document.getElementById('aspect').value.split('x').map(Number);
+  const count = parseInt(document.getElementById('count').value, 10);
+
+  go.disabled = true;
+  statusEl.textContent = 'Generating...';
+  results.innerHTML = '';
+
+  if (provider === 'pollinations') await generatePollinations(fullPrompt, w, h, count);
+  else if (provider === 'fal') await generateFal(fullPrompt, w, h, count);
+  else if (provider === 'replicate') await generateReplicate(fullPrompt, w, h, count);
+
+  go.disabled = false;
+});
+</script>
+</body>
+</html>
